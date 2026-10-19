@@ -1112,10 +1112,16 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
             focusedSurface = view
         }
 
-        // Initialize our content view to the SwiftUI root
-        let container = TerminalViewContainer {
+        // Initialize our content view to the SwiftUI root. Steppe adds native Herdr
+        // chrome beside the terminal surface; the surface still owns its PTY and can
+        // run `herdr attach` like any other terminal application.
+        let steppe = SteppeService.shared
+        let sidebar = NSHostingView(rootView: SteppeSidebarView(store: steppe.store))
+
+        let container = TerminalViewContainer(sidebar: sidebar) {
             TerminalView(ghostty: ghostty, viewModel: self, delegate: self)
         }
+        container.setSidebarVisible(steppe.isSidebarVisible)
 
         // Set the initial content size on the container so that
         // intrinsicContentSize returns the correct value immediately,

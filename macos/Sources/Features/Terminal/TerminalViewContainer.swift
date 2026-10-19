@@ -5,6 +5,8 @@ import SwiftUI
 /// Modifying `NSThemeFrame` can sometimes be unpredictable.
 class TerminalViewContainer: NSView {
     private let terminalView: NSView
+    private var sidebarView: NSView?
+    private var sidebarWidthConstraint: NSLayoutConstraint?
 
     /// Background color applied with glass effect
     private(set) var glassEffectView: NSView?
@@ -22,8 +24,9 @@ class TerminalViewContainer: NSView {
         return window.value(forKey: "_cornerRadius") as? CGFloat
     }
 
-    init<Root: View>(@ViewBuilder rootView: () -> Root) {
+    init<Root: View>(sidebar: NSView? = nil, @ViewBuilder rootView: () -> Root) {
         self.terminalView = NSHostingView(rootView: rootView())
+        self.sidebarView = sidebar
         super.init(frame: .zero)
         setup()
     }
@@ -55,12 +58,40 @@ class TerminalViewContainer: NSView {
     private func setup() {
         addSubview(terminalView)
         terminalView.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            terminalView.topAnchor.constraint(equalTo: topAnchor),
-            terminalView.leadingAnchor.constraint(equalTo: leadingAnchor),
-            terminalView.bottomAnchor.constraint(equalTo: bottomAnchor),
-            terminalView.trailingAnchor.constraint(equalTo: trailingAnchor),
-        ])
+
+        if let sidebarView {
+            addSubview(sidebarView)
+            sidebarView.translatesAutoresizingMaskIntoConstraints = false
+
+            let width = sidebarView.widthAnchor.constraint(equalToConstant: 264)
+            self.sidebarWidthConstraint = width
+
+            NSLayoutConstraint.activate([
+                sidebarView.topAnchor.constraint(equalTo: topAnchor),
+                sidebarView.leadingAnchor.constraint(equalTo: leadingAnchor),
+                sidebarView.bottomAnchor.constraint(equalTo: bottomAnchor),
+                width,
+                terminalView.topAnchor.constraint(equalTo: topAnchor),
+                terminalView.leadingAnchor.constraint(equalTo: sidebarView.trailingAnchor),
+                terminalView.bottomAnchor.constraint(equalTo: bottomAnchor),
+                terminalView.trailingAnchor.constraint(equalTo: trailingAnchor),
+            ])
+        } else {
+            NSLayoutConstraint.activate([
+                terminalView.topAnchor.constraint(equalTo: topAnchor),
+                terminalView.leadingAnchor.constraint(equalTo: leadingAnchor),
+                terminalView.bottomAnchor.constraint(equalTo: bottomAnchor),
+                terminalView.trailingAnchor.constraint(equalTo: trailingAnchor),
+            ])
+        }
+    }
+
+    /// Show or hide the Steppe sidebar. The terminal surface keeps the remaining width.
+    func setSidebarVisible(_ visible: Bool) {
+        guard let sidebarView else { return }
+        sidebarView.isHidden = !visible
+        sidebarWidthConstraint?.constant = visible ? 264 : 0
+        needsLayout = true
     }
 
     override func viewDidMoveToWindow() {

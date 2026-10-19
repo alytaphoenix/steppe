@@ -238,6 +238,11 @@ class AppDelegate: NSObject,
         // This registers the Ghostty => Services menu to exist.
         NSApp.servicesMenu = menuServices
 
+        // Add the Steppe menu for the native Herdr cockpit.
+        MainActor.assumeIsolated {
+            setupSteppeMenu()
+        }
+
         // Setup a local event monitor for app-level keyboard shortcuts. See
         // localEventHandler for more info why.
         _ = NSEvent.addLocalMonitorForEvents(
@@ -354,6 +359,55 @@ class AppDelegate: NSObject,
                 NSApp.arrangeInFront(nil)
             }
         }
+    }
+
+    // MARK: - Steppe
+
+    @MainActor
+    private func setupSteppeMenu() {
+        let menu = NSMenu(title: "Steppe")
+
+        let toggle = NSMenuItem(
+            title: "Show Herdr Sidebar",
+            action: #selector(toggleSteppeSidebar(_:)),
+            keyEquivalent: "s"
+        )
+        toggle.keyEquivalentModifierMask = [.control, .shift]
+        toggle.target = self
+        toggle.state = SteppeService.shared.isSidebarVisible ? .on : .off
+        menu.addItem(toggle)
+
+        let refresh = NSMenuItem(
+            title: "Refresh Herdr Session",
+            action: #selector(refreshSteppe(_:)),
+            keyEquivalent: "r"
+        )
+        refresh.keyEquivalentModifierMask = [.control, .shift]
+        refresh.target = self
+        menu.addItem(refresh)
+
+        guard let mainMenu = NSApp.mainMenu else { return }
+        let item = NSMenuItem()
+        item.submenu = menu
+        mainMenu.insertItem(item, at: max(0, mainMenu.items.count - 1))
+    }
+
+    @MainActor
+    @objc private func toggleSteppeSidebar(_ sender: Any?) {
+        let service = SteppeService.shared
+        service.isSidebarVisible.toggle()
+
+        for window in NSApp.windows {
+            (window.contentView as? TerminalViewContainer)?
+                .setSidebarVisible(service.isSidebarVisible)
+        }
+
+        (sender as? NSMenuItem)?.state = service.isSidebarVisible ? .on : .off
+    }
+
+    @MainActor
+    @objc private func refreshSteppe(_ sender: Any?) {
+        Task { await SteppeService.shared.store.refresh() }
     }
 
     func applicationDidHide(_ notification: Notification) {
