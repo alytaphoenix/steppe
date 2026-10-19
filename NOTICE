@@ -1,0 +1,22 @@
+Steppe
+Copyright (c) 2026 Steppe contributors
+
+Steppe is an independent fork of Ghostty with a native Herdr cockpit. It is not
+affiliated with, endorsed by, or supported by Ghostty or Herdr.
+
+Upstream projects:
+
+  Ghostty
+  Copyright (c) Mitchell Hashimoto and Ghostty contributors
+  MIT License
+  https://github.com/ghostty-org/ghostty
+
+  Herdr
+  Copyright (c) Herdr contributors
+  Apache License 2.0
+  https://github.com/herdrdev/herdr
+
+The protocol models in steppe-kit/Sources/HerdrKit and
+macos/Sources/Features/Steppe/HerdrKit are derived from Herdr's published JSON
+schema and documentation. Herdr's Apache-2.0 license and NOTICE requirements
+apply to that derived material.
