@@ -6,6 +6,8 @@ public enum HerdrSocketError: Error, Sendable, LocalizedError {
     case connectFailed(path: String, code: Int32)
     case writeFailed(code: Int32)
     case readFailed(code: Int32)
+    case timeout
+    case frameTooLarge(Int)
     case unexpectedEOF
     case malformedResponse(String)
     case server(String)
@@ -20,6 +22,10 @@ public enum HerdrSocketError: Error, Sendable, LocalizedError {
             "Could not write to Herdr: \(String(cString: strerror(code)))"
         case .readFailed(let code):
             "Could not read from Herdr: \(String(cString: strerror(code)))"
+        case .timeout:
+            "Herdr did not respond in time"
+        case .frameTooLarge(let size):
+            "Herdr sent an oversized frame (\(size) bytes)"
         case .unexpectedEOF:
             "Herdr closed the connection unexpectedly"
         case .malformedResponse(let detail):
@@ -34,6 +40,8 @@ public enum HerdrSocketError: Error, Sendable, LocalizedError {
 ///
 /// A new connection is opened per request. Event subscriptions hold one connection open.
 final class HerdrSocket: @unchecked Sendable {
+    private static let maxFrameSize = 16 * 1024 * 1024
+
     private let fd: Int32
     private let lock = NSLock()
     private var closed = false
@@ -43,7 +51,7 @@ final class HerdrSocket: @unchecked Sendable {
         self.fd = fd
     }
 
-    static func connect(path: String) throws -> HerdrSocket {
+    static func connect(path: String, readTimeout: TimeInterval = 0) throws -> HerdrSocket {
         var address = sockaddr_un()
         address.sun_family = sa_family_t(AF_UNIX)
 
@@ -71,6 +79,19 @@ final class HerdrSocket: @unchecked Sendable {
             &noSigPipe,
             socklen_t(MemoryLayout<Int32>.size)
         )
+
+        if readTimeout > 0 {
+            var timeout = timeval()
+            timeout.tv_sec = Int(readTimeout)
+            timeout.tv_usec = 0
+            _ = setsockopt(
+                fd,
+                SOL_SOCKET,
+                SO_RCVTIMEO,
+                &timeout,
+                socklen_t(MemoryLayout<timeval>.size)
+            )
+        }
 
         let result = withUnsafePointer(to: &address) { pointer in
             pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) { socketAddress in
@@ -133,6 +154,9 @@ final class HerdrSocket: @unchecked Sendable {
 
             if count < 0 {
                 if errno == EINTR { continue }
+                if errno == EAGAIN || errno == EWOULDBLOCK {
+                    throw HerdrSocketError.timeout
+                }
                 throw HerdrSocketError.readFailed(code: errno)
             }
 
@@ -141,6 +165,10 @@ final class HerdrSocket: @unchecked Sendable {
             }
 
             buffer.append(contentsOf: chunk.prefix(count))
+
+            if buffer.count > Self.maxFrameSize {
+                throw HerdrSocketError.frameTooLarge(buffer.count)
+            }
         }
     }
 

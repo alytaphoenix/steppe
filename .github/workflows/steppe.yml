@@ -1,0 +1,27 @@
+name: Steppe
+
+on:
+  push:
+    branches: [steppe, main]
+    paths:
+      - "steppe-kit/**"
+      - ".github/workflows/steppe.yml"
+  pull_request:
+    paths:
+      - "steppe-kit/**"
+      - ".github/workflows/steppe.yml"
+  workflow_dispatch:
+
+jobs:
+  herdrkit:
+    name: HerdrKit tests
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Swift version
+        run: swift --version
+
+      - name: Test
+        working-directory: steppe-kit
+        run: swift test

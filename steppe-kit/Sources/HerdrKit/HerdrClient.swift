@@ -201,7 +201,7 @@ public final class HerdrClient: @unchecked Sendable {
         return try await withCheckedThrowingContinuation { continuation in
             requestQueue.async {
                 do {
-                    let socket = try HerdrSocket.connect(path: self.socketPath)
+                    let socket = try HerdrSocket.connect(path: self.socketPath, readTimeout: 15)
                     defer { socket.close() }
 
                     try socket.writeLine(requestData)

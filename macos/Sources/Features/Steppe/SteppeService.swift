@@ -136,6 +136,7 @@ final class SteppeService: ObservableObject {
         store.$snapshot
             .combineLatest(store.$listedAgents)
             .receive(on: RunLoop.main)
+            .debounce(for: .milliseconds(50), scheduler: RunLoop.main)
             .map { snapshot, listed -> Int in
                 var blocked: Set<String> = []
 
