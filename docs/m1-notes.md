@@ -51,7 +51,8 @@ under `Features/Steppe` join the target automatically. No project-file edits wer
 - Steppe actions create workspaces/tabs and split panes through the socket API.
 - The app is rebranded as **Steppe** (`dev.steppe.app`, `Steppe.app`, `Steppe.icns`).
 - The `steppe-sidebar` config key gates the sidebar for new windows.
-- Local packaging produces `dist/Steppe-0.1.0.dmg` and `dist/Steppe-0.1.0-macos.zip`.
+- Local packaging produces `build-artifacts/Steppe-0.1.0.dmg` and
+  `build-artifacts/Steppe-0.1.0-macos.zip`.
 
 Known environment limits:
 

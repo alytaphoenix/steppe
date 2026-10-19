@@ -15,7 +15,7 @@ set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
 version="${VERSION:-0.1.0}"
 configuration="${CONFIGURATION:-ReleaseLocal}"
-out="$root/dist"
+out="$root/build-artifacts"
 app="$root/macos/build/$configuration/Steppe.app"
 
 if [[ -n "${SIGN_IDENTITY:-}" && -z "${CONFIGURATION:-}" ]]; then

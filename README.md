@@ -75,7 +75,7 @@ open build/Debug/Steppe.app
 If Nushell is installed, `macos/build.nu` wraps the Xcode step. Upstream's full build
 instructions remain in [HACKING.md](HACKING.md).
 
-Package a release build (zip and DMG) with:
+Package a release build (zip and DMG in `build-artifacts/`) with:
 
 ```sh
 scripts/package-macos.sh

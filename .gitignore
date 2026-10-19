@@ -39,4 +39,4 @@ steppe-kit/.swiftpm/
 macos/build/
 
 # Steppe artifacts
-dist/
+build-artifacts/
