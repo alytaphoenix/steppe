@@ -12,12 +12,15 @@ on:
       - ".github/workflows/steppe.yml"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   herdrkit:
     name: HerdrKit tests
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Swift version
         run: swift --version

@@ -1,5 +1,8 @@
 # Steppe
 
+[![Steppe CI](https://github.com/alytaphoenix/steppe/actions/workflows/steppe.yml/badge.svg?branch=steppe)](https://github.com/alytaphoenix/steppe/actions/workflows/steppe.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 **The open range for your agent herd.**
 
 Steppe is a macOS terminal for [Herdr](https://herdr.dev), built as a fork of
