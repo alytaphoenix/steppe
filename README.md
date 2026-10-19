@@ -14,16 +14,20 @@ inside the surface keeps drawing it.
 
 ## Status
 
-Milestone **M1**: the sidebar is integrated into the Ghostty macOS app.
-
+Milestone **local release**: the native sidebar, notifications, session picker, and
+Herdr actions are integrated into the rebranded Steppe macOS app.
 - Native sidebar with workspaces, tabs, panes, agents, and live status.
 - Click an agent or workspace to focus it through Herdr.
-- `ctrl+shift+s` shows/hides the sidebar; `ctrl+shift+r` refreshes it.
-- Connection state, reconnect with backoff, and a two-second safety poll.
+- Per-pane `pane.agent_status_changed` subscriptions, with authoritative snapshot refreshes.
+- Native notifications and a dock badge for agents that need attention; click a notification to
+  focus its pane.
+- Create workspaces/tabs, split panes, and jump to the next attention-needing agent from the
+  sidebar or the Steppe menu.
+- `ctrl+shift+s` shows/hides the sidebar; `ctrl+shift+r` refreshes it; `ctrl+shift+a` focuses
+  the next attention-needing agent.
+- Session picker for named Herdr sessions.
+- `steppe-sidebar` config key (default `true`) gates the sidebar for new windows.
 - The standalone client kit and M0 spike live in [`steppe-kit/`](steppe-kit/).
-
-Not yet: native notifications, dock badge, per-pane status subscriptions, and a
-config-gated Herdr-only window mode.
 
 ## Layout
 
@@ -65,11 +69,22 @@ cd macos
 xcodebuild -project Ghostty.xcodeproj -scheme Ghostty \
   -configuration Debug SYMROOT="$PWD/build" build
 
-open build/Debug/Ghostty.app
+open build/Debug/Steppe.app
 ```
 
 If Nushell is installed, `macos/build.nu` wraps the Xcode step. Upstream's full build
 instructions remain in [HACKING.md](HACKING.md).
+
+Package a release build (zip and DMG) with:
+
+```sh
+scripts/package-macos.sh
+```
+
+The packaged build uses the optimized `ReleaseLocal` configuration with ad-hoc signing and
+`disable-library-validation`, which lets the bundled Sparkle framework load without a Developer
+ID. For a Developer ID build, set `CONFIGURATION=Release` plus `SIGN_IDENTITY`, `TEAM_ID`, and
+optionally `NOTARY_PROFILE`. Without them the app is suitable only for local use.
 
 ## Run with Herdr
 
@@ -91,7 +106,20 @@ sidebar_start_collapsed = true
 sidebar_collapsed_mode = "hidden"
 ```
 
-Native notifications are not wired yet; Herdr's `ui.toast.delivery` defaults to `"off"`.
+Steppe-specific Ghostty config:
+
+```toml
+# Show the native sidebar for new windows (default true; toggle from the Steppe menu).
+steppe-sidebar = true
+```
+
+Steppe posts native notifications on blocked/done transitions and updates the dock badge.
+Herdr's `ui.toast.delivery` defaults to `"off"`, so there is no double notification.
+
+Steppe still reads Ghostty's configuration at `~/.config/ghostty/config`, so existing
+settings carry over. The bundle identifier is `dev.steppe.app` (Debug:
+`dev.steppe.app.debug`). Notifications need the app to be signed and allowed in System
+Settings; an ad-hoc local build may be denied by macOS.
 
 ## Upstream
 

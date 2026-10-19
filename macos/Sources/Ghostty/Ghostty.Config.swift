@@ -254,6 +254,17 @@ extension Ghostty {
             return WindowDecoration(rawValue: str)?.enabled() ?? defaultValue
         }
 
+        /// Steppe-specific setting. Upstream Ghostty ignores this key; it is
+        /// declared in Config.zig so `ghostty_config_get` resolves it.
+        var steppeSidebar: Bool {
+            let defaultValue = true
+            guard let config = self.config else { return defaultValue }
+            var v = defaultValue
+            let key = "steppe-sidebar"
+            _ = ghostty_config_get(config, &v, key, UInt(key.lengthOfBytes(using: .utf8)))
+            return v
+        }
+
         var windowTheme: String? {
             guard let config = self.config else { return nil }
             var v: UnsafePointer<Int8>?

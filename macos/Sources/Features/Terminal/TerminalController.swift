@@ -1116,12 +1116,12 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         // chrome beside the terminal surface; the surface still owns its PTY and can
         // run `herdr attach` like any other terminal application.
         let steppe = SteppeService.shared
-        let sidebar = NSHostingView(rootView: SteppeSidebarView(store: steppe.store))
+        let sidebar = NSHostingView(rootView: SteppeSidebarView(service: steppe))
 
         let container = TerminalViewContainer(sidebar: sidebar) {
             TerminalView(ghostty: ghostty, viewModel: self, delegate: self)
         }
-        container.setSidebarVisible(steppe.isSidebarVisible)
+        container.setSidebarVisible(config.steppeSidebar && steppe.isSidebarVisible)
 
         // Set the initial content size on the container so that
         // intrinsicContentSize returns the correct value immediately,

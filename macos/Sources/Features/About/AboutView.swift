@@ -74,14 +74,18 @@ struct AboutView: View {
 
     var body: some View {
         VStack(alignment: .center) {
-            CyclingIconView()
+            Image("AppIconImage")
+                .resizable()
+                .scaledToFit()
+                .frame(height: 128)
+                .accessibilityLabel("Steppe Application Icon")
 
             VStack(alignment: .center, spacing: 32) {
                 VStack(alignment: .center, spacing: 8) {
-                    Text("Ghostty")
+                    Text("Steppe")
                         .bold()
                         .font(.title)
-                    Text("Fast, native, feature-rich terminal \nemulator pushing modern features.")
+                    Text("A native terminal and cockpit \nfor your Herdr agent herd.")
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
                         .font(.caption)

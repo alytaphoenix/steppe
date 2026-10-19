@@ -367,6 +367,17 @@ class AppDelegate: NSObject,
     private func setupSteppeMenu() {
         let menu = NSMenu(title: "Steppe")
 
+        let open = NSMenuItem(
+            title: "Open Herdr in New Tab",
+            action: #selector(openHerdr(_:)),
+            keyEquivalent: "h"
+        )
+        open.keyEquivalentModifierMask = [.control, .shift]
+        open.target = self
+        menu.addItem(open)
+
+        menu.addItem(.separator())
+
         let toggle = NSMenuItem(
             title: "Show Herdr Sidebar",
             action: #selector(toggleSteppeSidebar(_:)),
@@ -386,10 +397,33 @@ class AppDelegate: NSObject,
         refresh.target = self
         menu.addItem(refresh)
 
+        menu.addItem(.separator())
+
+        let attention = NSMenuItem(
+            title: "Focus Next Attention",
+            action: #selector(focusNextSteppeAttention(_:)),
+            keyEquivalent: "a"
+        )
+        attention.keyEquivalentModifierMask = [.control, .shift]
+        attention.target = self
+        menu.addItem(attention)
+
         guard let mainMenu = NSApp.mainMenu else { return }
         let item = NSMenuItem()
         item.submenu = menu
         mainMenu.insertItem(item, at: max(0, mainMenu.items.count - 1))
+    }
+
+    @MainActor
+    @objc func openHerdr(_ sender: Any?) {
+        let session = SteppeService.shared.session
+        let command = session.name == "default"
+            ? "herdr attach"
+            : "herdr --session \(Ghostty.Shell.quote(session.name)) attach"
+
+        var config = Ghostty.SurfaceConfiguration()
+        config.initialInput = "\(command)\n"
+        _ = TerminalController.newTab(ghostty, withBaseConfig: config)
     }
 
     @MainActor
@@ -408,6 +442,11 @@ class AppDelegate: NSObject,
     @MainActor
     @objc private func refreshSteppe(_ sender: Any?) {
         Task { await SteppeService.shared.store.refresh() }
+    }
+
+    @MainActor
+    @objc private func focusNextSteppeAttention(_ sender: Any?) {
+        Task { await SteppeService.shared.store.focusNextAttention() }
     }
 
     func applicationDidHide(_ notification: Notification) {
@@ -577,7 +616,7 @@ class AppDelegate: NSObject,
                 Self.logger.warning("refusing to execute file with control characters path=\(filename.debugDescription, privacy: .public)")
                 let alert = NSAlert()
                 alert.messageText = "Cannot Execute File"
-                alert.informativeText = "This file's path contains hidden control characters, which could make Ghostty run a different command than the one shown."
+                alert.informativeText = "This file's path contains hidden control characters, which could make Steppe run a different command than the one shown."
                 alert.addButton(withTitle: "OK")
                 alert.alertStyle = .warning
                 alert.runModal()
@@ -606,7 +645,7 @@ class AppDelegate: NSObject,
             // may want to show this as a sheet on the focused window (especially if we're
             // opening a tab). I'm not sure.
             let alert = NSAlert()
-            alert.messageText = "Allow Ghostty to execute \"\(filename)\"?"
+            alert.messageText = "Allow Steppe to execute \"\(filename)\"?"
             alert.addButton(withTitle: "Allow")
             alert.addButton(withTitle: "Cancel")
             alert.alertStyle = .warning
@@ -1004,7 +1043,16 @@ class AppDelegate: NSObject,
         didReceive: UNNotificationResponse,
         withCompletionHandler: () -> Void
     ) {
-        ghostty.handleUserNotification(response: didReceive)
+        let userInfo = didReceive.notification.request.content.userInfo
+
+        if userInfo[SteppeNotifications.paneIDKey] != nil {
+            Task { @MainActor in
+                SteppeService.shared.handleNotification(userInfo: userInfo)
+            }
+        } else {
+            ghostty.handleUserNotification(response: didReceive)
+        }
+
         withCompletionHandler()
     }
 
@@ -1013,6 +1061,11 @@ class AppDelegate: NSObject,
         willPresent: UNNotification,
         withCompletionHandler: (UNNotificationPresentationOptions) -> Void
     ) {
+        if willPresent.request.content.userInfo[SteppeNotifications.paneIDKey] != nil {
+            withCompletionHandler([.banner, .sound])
+            return
+        }
+
         let shouldPresent = ghostty.shouldPresentNotification(notification: willPresent)
         let options: UNNotificationPresentationOptions = shouldPresent ? [.banner, .sound] : []
         withCompletionHandler(options)
@@ -1370,7 +1423,7 @@ extension AppDelegate {
                 let alert = NSAlert()
                 alert.messageText = "Failed to Set Default Terminal"
                 alert.informativeText = """
-                Ghostty could not be set as the default terminal application.
+                Steppe could not be set as the default terminal application.
 
                 Error: \(error.localizedDescription)
                 """

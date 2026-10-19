@@ -241,11 +241,23 @@ public struct SessionSnapshot: Codable, Sendable, Equatable {
     }
 }
 
+public struct HerdrSubscription: Sendable, Equatable {
+    public var type: String
+    public var paneId: String?
+
+    public init(type: String, paneId: String? = nil) {
+        self.type = type
+        self.paneId = paneId
+    }
+}
+
+public enum SplitDirection: String, Codable, Sendable {
+    case right
+    case down
+}
+
 public enum HerdrSubscriptions {
-    /// Lifecycle events that invalidate a cached snapshot. Status changes for individual panes
-    /// are not included because Herdr requires a `pane_id` for those subscriptions; the store
-    /// polls as a safety net and will move to per-pane subscriptions once the UI needs sub-second
-    /// status latency.
+    /// Lifecycle events that invalidate a cached snapshot.
     public static let lifecycle: [String] = [
         "workspace.created",
         "workspace.updated",
@@ -272,6 +284,16 @@ public enum HerdrSubscriptions {
         "pane.agent_detected",
         "layout.updated",
     ]
+
+    /// Lifecycle subscriptions plus one status subscription per live pane. Herdr rejects the
+    /// whole request when any filtered subscription references a pane that no longer exists, so
+    /// the store rebuilds this list whenever the pane set changes.
+    public static func forSnapshot(_ snapshot: SessionSnapshot) -> [HerdrSubscription] {
+        lifecycle.map { HerdrSubscription(type: $0) }
+            + snapshot.panes.map {
+                HerdrSubscription(type: "pane.agent_status_changed", paneId: $0.paneId)
+            }
+    }
 }
 
 public struct HerdrEvent: Codable, Sendable, Equatable {
@@ -281,6 +303,24 @@ public struct HerdrEvent: Codable, Sendable, Equatable {
     public init(event: String, data: JSONValue? = nil) {
         self.event = event
         self.data = data
+    }
+}
+
+public struct AgentStatusChangedEvent: Codable, Sendable, Equatable {
+    public var paneId: String
+    public var workspaceId: String
+    public var agentStatus: AgentStatus
+    public var agent: String?
+    public var displayAgent: String?
+    public var title: String?
+    public var stateLabels: [String: String]?
+}
+
+extension HerdrEvent {
+    public func decodeData<T: Decodable>(_ type: T.Type) -> T? {
+        guard let data else { return nil }
+        guard let encoded = try? JSONEncoder().encode(data) else { return nil }
+        return try? JSONDecoder.herdr.decode(T.self, from: encoded)
     }
 }
 
@@ -323,6 +363,24 @@ public struct PongResult: Codable, Sendable {
 public struct AgentListResult: Codable, Sendable {
     public var type: String
     public var agents: [AgentInfo]
+}
+
+public struct WorkspaceCreatedResult: Codable, Sendable {
+    public var type: String
+    public var workspace: WorkspaceInfo
+    public var tab: TabInfo
+    public var rootPane: PaneInfo
+}
+
+public struct TabCreatedResult: Codable, Sendable {
+    public var type: String
+    public var tab: TabInfo
+    public var rootPane: PaneInfo
+}
+
+public struct PaneInfoResult: Codable, Sendable {
+    public var type: String
+    public var pane: PaneInfo
 }
 
 extension JSONDecoder {

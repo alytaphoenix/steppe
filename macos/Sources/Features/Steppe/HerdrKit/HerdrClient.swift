@@ -65,20 +65,67 @@ public final class HerdrClient: @unchecked Sendable {
         )
     }
 
+    public func createWorkspace(
+        label: String? = nil,
+        cwd: String? = nil,
+        focus: Bool = true
+    ) async throws -> WorkspaceCreatedResult {
+        var params: [String: JSONValue] = ["focus": .bool(focus)]
+        if let label { params["label"] = .string(label) }
+        if let cwd { params["cwd"] = .string(cwd) }
+        return try await request("workspace.create", params: .object(params))
+    }
+
+    public func createTab(
+        workspaceId: String? = nil,
+        label: String? = nil,
+        focus: Bool = true
+    ) async throws -> TabCreatedResult {
+        var params: [String: JSONValue] = ["focus": .bool(focus)]
+        if let workspaceId { params["workspace_id"] = .string(workspaceId) }
+        if let label { params["label"] = .string(label) }
+        return try await request("tab.create", params: .object(params))
+    }
+
+    public func splitPane(
+        paneId: String? = nil,
+        direction: SplitDirection,
+        focus: Bool = true
+    ) async throws -> PaneInfoResult {
+        var params: [String: JSONValue] = [
+            "direction": .string(direction.rawValue),
+            "focus": .bool(focus),
+        ]
+        if let paneId { params["target_pane_id"] = .string(paneId) }
+        return try await request("pane.split", params: .object(params))
+    }
+
     // MARK: - Events
 
     /// Opens a long-lived subscription. The caller treats events as invalidation signals and
     /// refreshes an authoritative snapshot; that avoids depending on every event payload shape.
     public func events(subscriptions: [String]) -> AsyncThrowingStream<HerdrEvent, Error> {
+        events(subscriptionValues: subscriptions.map {
+            .object(["type": .string($0)])
+        })
+    }
+
+    public func events(subscriptions: [HerdrSubscription]) -> AsyncThrowingStream<HerdrEvent, Error> {
+        events(subscriptionValues: subscriptions.map { subscription in
+            var value: [String: JSONValue] = ["type": .string(subscription.type)]
+            if let paneId = subscription.paneId {
+                value["pane_id"] = .string(paneId)
+            }
+            return .object(value)
+        })
+    }
+
+    private func events(subscriptionValues: [JSONValue]) -> AsyncThrowingStream<HerdrEvent, Error> {
         let requestData: Data
         do {
             requestData = try Self.encodeRequest(
                 method: "events.subscribe",
-                params: .object([
-                    "subscriptions": .array(
-                        subscriptions.map { .object(["type": .string($0)]) }
-                    ),
-                ])
+                params: .object(["subscriptions": .array(subscriptionValues)])
             )
         } catch {
             return AsyncThrowingStream { $0.finish(throwing: error) }

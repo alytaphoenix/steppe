@@ -41,10 +41,29 @@ under `Features/Steppe` join the target automatically. No project-file edits wer
   `ui.sidebar_start_collapsed = true` and `ui.sidebar_collapsed_mode = "hidden"` in
   `~/.config/herdr/config.toml` for a single-sidebar setup.
 
+## M2/M3 update
+
+- Per-pane `pane.agent_status_changed` subscriptions are live; the store rebuilds the
+  subscription set whenever the pane list changes and treats events as invalidation signals.
+- `events_lost` reconnects immediately and reconciles with a fresh snapshot.
+- Native notifications and the dock badge are wired through `SteppeNotifications`.
+- Named-session switching recreates the store without restarting the app.
+- Steppe actions create workspaces/tabs and split panes through the socket API.
+- The app is rebranded as **Steppe** (`dev.steppe.app`, `Steppe.app`, `Steppe.icns`).
+- The `steppe-sidebar` config key gates the sidebar for new windows.
+- Local packaging produces `dist/Steppe-0.1.0.dmg` and `dist/Steppe-0.1.0-macos.zip`.
+
+Known environment limits:
+
+- `UNUserNotificationCenter` refused authorization for the ad-hoc debug bundle
+  (`Notifications are not allowed for this application`). Notifications should be tested from
+  a signed Release build installed in `/Applications`.
+- The release package uses `ReleaseLocal` because the hardened `Release` configuration rejects
+  the ad-hoc-signed Sparkle framework without `disable-library-validation`.
+
 ## Next
 
-1. Gate the sidebar on a config key and add a dedicated Herdr window mode.
-2. Native notifications and dock badge from `pane.agent_status_changed`.
-3. Per-pane status subscriptions instead of the two-second poll.
-4. `events_lost` recovery and multi-session support.
-5. Rebrand the app bundle (currently still `com.mitchellh.ghostty`).
+1. Sign and notarize a Developer ID release, then verify notifications end to end.
+2. Add configurable, resizable sidebar widths and a compact collapsed rail.
+3. Replace the full snapshot poll with layout-diff updates for large sessions.
+4. Add a `Steppe` settings page for socket/session, notifications, and sidebar behavior.

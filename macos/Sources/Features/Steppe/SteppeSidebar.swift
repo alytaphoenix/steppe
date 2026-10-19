@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 private enum SteppeSidebarSelection: Hashable {
@@ -9,9 +10,24 @@ private enum SteppeSidebarSelection: Hashable {
 /// terminal: clicks focus the corresponding Herdr pane, and the TUI inside the surface remains
 /// the place where panes are drawn.
 struct SteppeSidebarView: View {
-    @ObservedObject var store: HerdrStore
+    @ObservedObject var service: SteppeService
+
+    var body: some View {
+        SteppeSidebarContent(service: service)
+            .id(service.session.socketPath)
+    }
+}
+
+private struct SteppeSidebarContent: View {
+    @ObservedObject var service: SteppeService
+    @ObservedObject private var store: HerdrStore
 
     @State private var selection: SteppeSidebarSelection?
+
+    init(service: SteppeService) {
+        self.service = service
+        self._store = ObservedObject(wrappedValue: service.store)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -36,25 +52,110 @@ struct SteppeSidebarView: View {
     }
 
     private var header: some View {
-        HStack(spacing: 8) {
-            Text("Steppe")
-                .font(.headline)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Text("Steppe")
+                    .font(.headline)
 
-            Spacer()
+                Spacer()
 
-            ConnectionDot(state: store.state)
-
-            Button {
-                Task { await store.refresh() }
-            } label: {
-                Image(systemName: "arrow.clockwise")
-                    .font(.caption)
+                ConnectionDot(state: store.state)
             }
-            .buttonStyle(.plain)
-            .help("Refresh Herdr")
+
+            HStack(spacing: 6) {
+                sessionMenu
+
+                Spacer()
+
+                openHerdrButton
+                actionsMenu
+                refreshButton
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
+    }
+
+    private var sessionMenu: some View {
+        Menu {
+            ForEach(service.availableSessions, id: \.socketPath) { session in
+                Button {
+                    service.selectSession(session)
+                } label: {
+                    if session.socketPath == service.session.socketPath {
+                        Label(session.name, systemImage: "checkmark")
+                    } else {
+                        Text(session.name)
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 3) {
+                Image(systemName: "server.rack")
+                Text(service.session.name)
+                    .lineLimit(1)
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .help("Herdr session")
+    }
+
+    private var openHerdrButton: some View {
+        Button {
+            (NSApp.delegate as? AppDelegate)?.openHerdr(nil)
+        } label: {
+            Image(systemName: "play.rectangle")
+                .font(.caption)
+        }
+        .buttonStyle(.plain)
+        .help("Open Herdr in a new tab")
+    }
+
+    private var actionsMenu: some View {
+        Menu {
+            Button("New Workspace") {
+                Task { await store.newWorkspace() }
+            }
+            Button("New Tab") {
+                Task { await store.newTab() }
+            }
+
+            Divider()
+
+            Button("Split Right") {
+                Task { await store.splitFocusedPane(direction: .right) }
+            }
+            Button("Split Down") {
+                Task { await store.splitFocusedPane(direction: .down) }
+            }
+
+            Divider()
+
+            Button("Focus Next Attention") {
+                Task { await store.focusNextAttention() }
+            }
+            .disabled(store.attentionAgents.isEmpty)
+        } label: {
+            Image(systemName: "plus")
+                .font(.caption)
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .help("Herdr actions")
+    }
+
+    private var refreshButton: some View {
+        Button {
+            Task { await store.refresh() }
+        } label: {
+            Image(systemName: "arrow.clockwise")
+                .font(.caption)
+        }
+        .buttonStyle(.plain)
+        .help("Refresh Herdr")
     }
 
     @ViewBuilder
@@ -67,6 +168,7 @@ struct SteppeSidebarView: View {
                     ForEach(store.agents) { agent in
                         AgentRow(agent: agent)
                             .tag(SteppeSidebarSelection.agent(agent.paneId))
+                            .help("\(agent.workspaceId) · \(agent.tabId) · \(agent.paneId)")
                     }
                 }
             } header: {
@@ -91,6 +193,7 @@ struct SteppeSidebarView: View {
                             agentCount: store.agents(in: workspace.workspaceId).count
                         )
                         .tag(SteppeSidebarSelection.workspace(workspace.workspaceId))
+                        .help(workspace.worktree?.checkoutPath ?? workspace.workspaceId)
                     }
                 }
             }
@@ -102,7 +205,7 @@ struct SteppeSidebarView: View {
     private var footer: some View {
         VStack(alignment: .leading, spacing: 3) {
             HStack(spacing: 5) {
-                Text(store.session.name)
+                Text("\(store.workspaces.count) spaces · \(store.totalPanes) panes")
                     .lineLimit(1)
                 Spacer()
                 if let lastRefresh = store.lastRefresh {
@@ -111,7 +214,11 @@ struct SteppeSidebarView: View {
                 }
             }
 
-            if let detail = store.state.detail {
+            if let actionError = store.actionError {
+                Text(actionError)
+                    .lineLimit(2)
+                    .foregroundStyle(.orange)
+            } else if let detail = store.state.detail {
                 Text(detail)
                     .lineLimit(2)
                     .foregroundStyle(.secondary)
@@ -163,6 +270,7 @@ private struct AgentRow: View {
             }
         }
         .padding(.vertical, 1)
+        .accessibilityLabel("\(agent.resolvedName), \(agent.statusLabel)")
     }
 }
 
@@ -193,6 +301,7 @@ private struct WorkspaceRow: View {
             }
         }
         .padding(.vertical, 1)
+        .accessibilityLabel("\(workspace.label), \(subtitle)")
     }
 
     private var subtitle: String {
@@ -238,6 +347,7 @@ private struct ConnectionDot: View {
             .fill(color)
             .frame(width: 6, height: 6)
             .help(state.detail ?? "Herdr \(state.label)")
+            .accessibilityLabel("Herdr \(state.label)")
     }
 
     private var color: Color {

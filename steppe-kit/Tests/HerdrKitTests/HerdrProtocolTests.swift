@@ -89,6 +89,41 @@ final class HerdrProtocolTests: XCTestCase {
         XCTAssertNil(envelope.result)
     }
 
+    func testDecodesAgentStatusChangedEvent() throws {
+        let snapshot = try JSONDecoder.herdr.decode(
+            SessionSnapshot.self,
+            from: Data(Self.snapshotJSON.utf8)
+        )
+
+        let json = """
+        {"event":"pane.agent_status_changed","data":{"pane_id":"w1:p1","workspace_id":"w1","agent_status":"blocked","agent":"claude","display_agent":"reviewer","state_labels":{"blocked":"needs review"}}}
+        """
+
+        let event = try JSONDecoder.herdr.decode(HerdrEvent.self, from: Data(json.utf8))
+        let change = try XCTUnwrap(event.decodeData(AgentStatusChangedEvent.self))
+
+        XCTAssertEqual(change.paneId, "w1:p1")
+        XCTAssertEqual(change.workspaceId, "w1")
+        XCTAssertEqual(change.agentStatus, .blocked)
+        XCTAssertEqual(change.displayAgent, "reviewer")
+        XCTAssertEqual(change.stateLabels?["blocked"], "needs review")
+        XCTAssertEqual(snapshot.panes.first?.paneId, change.paneId)
+    }
+
+    func testSnapshotSubscriptionsIncludeEveryPane() throws {
+        let snapshot = try JSONDecoder.herdr.decode(
+            SessionSnapshot.self,
+            from: Data(Self.snapshotJSON.utf8)
+        )
+
+        let subscriptions = HerdrSubscriptions.forSnapshot(snapshot)
+        XCTAssertEqual(subscriptions.count, HerdrSubscriptions.lifecycle.count + snapshot.panes.count)
+
+        let statusSubscriptions = subscriptions.filter { $0.type == "pane.agent_status_changed" }
+        XCTAssertEqual(statusSubscriptions.count, snapshot.panes.count)
+        XCTAssertEqual(statusSubscriptions.first?.paneId, "w1:p1")
+    }
+
     private static let snapshotJSON = """
     {
       "version": "0.9.3",

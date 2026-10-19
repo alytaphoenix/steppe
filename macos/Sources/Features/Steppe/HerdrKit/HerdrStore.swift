@@ -1,5 +1,5 @@
-import Foundation
 import Combine
+import Foundation
 
 @MainActor
 public final class HerdrStore: ObservableObject {
@@ -35,13 +35,18 @@ public final class HerdrStore: ObservableObject {
     @Published public private(set) var lastRefresh: Date?
     @Published public private(set) var eventCount: Int = 0
     @Published public private(set) var actionError: String?
+    @Published public private(set) var lastStatusChange: AgentStatusChangedEvent?
 
     public let client: HerdrClient
     public let session: HerdrSession
 
+    /// Called on the main actor whenever Herdr reports a semantic agent status change.
+    public var onAgentStatusChange: ((AgentStatusChangedEvent) -> Void)?
+
     private var eventTask: Task<Void, Never>?
     private var pollTask: Task<Void, Never>?
     private var refreshTask: Task<Void, Never>?
+    private var activeSubscriptions: [HerdrSubscription] = []
     private var started = false
 
     public init(session: HerdrSession) {
@@ -61,6 +66,9 @@ public final class HerdrStore: ObservableObject {
         guard !started else { return }
         started = true
         state = .connecting
+        activeSubscriptions = HerdrSubscriptions.lifecycle.map {
+            HerdrSubscription(type: $0)
+        }
 
         eventTask = Task { [weak self] in
             await self?.runEventLoop()
@@ -79,12 +87,17 @@ public final class HerdrStore: ObservableObject {
         eventTask = nil
         pollTask = nil
         refreshTask = nil
+        activeSubscriptions = []
         state = .idle
     }
 
     // MARK: - Reads
 
     public func refresh() async {
+        await refresh(restartEvents: true)
+    }
+
+    private func refresh(restartEvents: Bool) async {
         do {
             async let snapshotRequest = client.snapshot()
             async let agentsRequest = client.agents()
@@ -92,10 +105,21 @@ public final class HerdrStore: ObservableObject {
             let snapshot = try await snapshotRequest
             let agents = (try? await agentsRequest) ?? []
 
-            self.snapshot = snapshot
-            self.listedAgents = agents
+            if self.snapshot != snapshot {
+                self.snapshot = snapshot
+            }
+            if self.listedAgents != agents {
+                self.listedAgents = agents
+            }
+
             self.state = .connected
             self.lastRefresh = Date()
+
+            if restartEvents {
+                restartEventsIfNeeded()
+            } else {
+                activeSubscriptions = desiredSubscriptions()
+            }
         } catch {
             self.state = .disconnected(error.localizedDescription)
         }
@@ -117,11 +141,14 @@ public final class HerdrStore: ObservableObject {
         var backoffMilliseconds = 500
 
         while !Task.isCancelled {
+            let subscriptions = activeSubscriptions.isEmpty
+                ? HerdrSubscriptions.lifecycle.map { HerdrSubscription(type: $0) }
+                : activeSubscriptions
+
             do {
-                for try await event in client.events(subscriptions: HerdrSubscriptions.lifecycle) {
+                for try await event in client.events(subscriptions: subscriptions) {
                     eventCount += 1
-                    // The event payload is a hint; the snapshot is the authority.
-                    _ = event
+                    handle(event)
                     scheduleRefresh()
                 }
 
@@ -129,7 +156,12 @@ public final class HerdrStore: ObservableObject {
                 state = .disconnected("event stream ended")
             } catch {
                 if Task.isCancelled { return }
+
+                let lost = (error as? HerdrError)?.code == "events_lost"
                 state = .disconnected(error.localizedDescription)
+                if lost {
+                    backoffMilliseconds = 100
+                }
             }
 
             do {
@@ -138,9 +170,31 @@ public final class HerdrStore: ObservableObject {
                 return
             }
 
-            backoffMilliseconds = min(backoffMilliseconds * 2, 10_000)
-            await refresh()
+            if (try? await client.ping()) == nil {
+                backoffMilliseconds = min(backoffMilliseconds * 2, 10_000)
+            } else {
+                backoffMilliseconds = 500
+            }
+
+            // Do not cancel the task we are running in. Refresh the authoritative state and
+            // update the subscription list; the next loop iteration picks it up.
+            await refresh(restartEvents: false)
         }
+    }
+
+    private func handle(_ event: HerdrEvent) {
+        guard event.event == "pane.agent_status_changed"
+            || event.event == "pane_agent_status_changed"
+        else {
+            return
+        }
+
+        guard let change = event.decodeData(AgentStatusChangedEvent.self) else {
+            return
+        }
+
+        lastStatusChange = change
+        onAgentStatusChange?(change)
     }
 
     private func scheduleRefresh() {
@@ -154,6 +208,26 @@ public final class HerdrStore: ObservableObject {
 
             guard !Task.isCancelled else { return }
             await self?.refresh()
+        }
+    }
+
+    // MARK: - Subscriptions
+
+    private func desiredSubscriptions() -> [HerdrSubscription] {
+        guard let snapshot else {
+            return HerdrSubscriptions.lifecycle.map { HerdrSubscription(type: $0) }
+        }
+        return HerdrSubscriptions.forSnapshot(snapshot)
+    }
+
+    private func restartEventsIfNeeded() {
+        let desired = desiredSubscriptions()
+        guard desired != activeSubscriptions else { return }
+
+        activeSubscriptions = desired
+        eventTask?.cancel()
+        eventTask = Task { [weak self] in
+            await self?.runEventLoop()
         }
     }
 
@@ -180,6 +254,35 @@ public final class HerdrStore: ObservableObject {
     public func focus(pane paneId: String) async {
         await perform {
             try await self.client.focusPane(paneId)
+        }
+    }
+
+    /// Focus the first agent that needs attention, preferring one that is not already focused.
+    public func focusNextAttention() async {
+        let candidates = agents.filter { $0.agentStatus.isAttention }
+        guard let next = candidates.first(where: { !$0.focused }) ?? candidates.first else {
+            return
+        }
+        await focus(agent: next.paneId)
+    }
+
+    public func newWorkspace() async {
+        await perform {
+            _ = try await self.client.createWorkspace(focus: true)
+        }
+    }
+
+    public func newTab() async {
+        let workspaceId = snapshot?.focusedWorkspaceId ?? workspaces.first?.workspaceId
+        await perform {
+            _ = try await self.client.createTab(workspaceId: workspaceId, focus: true)
+        }
+    }
+
+    public func splitFocusedPane(direction: SplitDirection) async {
+        let paneId = snapshot?.focusedPaneId
+        await perform {
+            _ = try await self.client.splitPane(paneId: paneId, direction: direction, focus: true)
         }
     }
 

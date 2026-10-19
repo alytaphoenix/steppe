@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
 #
 # Build the Steppe macOS app. Requires Zig 0.16.0, Xcode 26+, and the Metal
-# Toolchain. Override the Zig binary with ZIG=/path/to/zig.
+# Toolchain. Override the Zig binary with ZIG=/path/to/zig, the build
+# configuration with CONFIGURATION=Release, or the signing identity with
+# SIGN_IDENTITY / TEAM_ID.
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
 zig="${ZIG:-$HOME/.local/zig/zig-aarch64-macos-0.16.0/zig}"
+configuration="${CONFIGURATION:-Debug}"
 
 if [[ ! -x "$zig" ]]; then
   echo "error: Zig not found at $zig" >&2
@@ -22,12 +25,22 @@ cd "$root"
 "$zig" build -Demit-macos-app=false
 
 cd macos
+
+signing=()
+if [[ -n "${SIGN_IDENTITY:-}" ]]; then
+  signing+=("CODE_SIGN_IDENTITY=$SIGN_IDENTITY")
+  if [[ -n "${TEAM_ID:-}" ]]; then
+    signing+=("DEVELOPMENT_TEAM=$TEAM_ID")
+  fi
+fi
+
 xcodebuild \
   -project Ghostty.xcodeproj \
   -scheme Ghostty \
-  -configuration Debug \
+  -configuration "$configuration" \
   SYMROOT="$PWD/build" \
+  ${signing[@]+"${signing[@]}"} \
   build
 
 echo
-echo "Built: $root/macos/build/Debug/Ghostty.app"
+echo "Built: $root/macos/build/$configuration/Steppe.app"

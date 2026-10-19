@@ -55,4 +55,32 @@ final class HerdrSessionTests: XCTestCase {
         let session = HerdrSession.discover(environment: [:], home: home)
         XCTAssertTrue(session.exists)
     }
+
+    func testAvailableSessionsFindsNamedSockets() throws {
+        let home = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let sessionsDirectory = home
+            .appendingPathComponent(".config", isDirectory: true)
+            .appendingPathComponent("herdr", isDirectory: true)
+            .appendingPathComponent("sessions", isDirectory: true)
+
+        for name in ["beta", "alpha"] {
+            let directory = sessionsDirectory.appendingPathComponent(name, isDirectory: true)
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            let socket = directory.appendingPathComponent("herdr.sock")
+            XCTAssertTrue(FileManager.default.createFile(atPath: socket.path, contents: Data()))
+        }
+
+        // A directory without a socket should be ignored.
+        try FileManager.default.createDirectory(
+            at: sessionsDirectory.appendingPathComponent("empty", isDirectory: true),
+            withIntermediateDirectories: true
+        )
+
+        defer { try? FileManager.default.removeItem(at: home) }
+
+        let sessions = HerdrSession.availableSessions(home: home)
+        XCTAssertEqual(sessions.map(\.name), ["alpha", "beta"])
+        XCTAssertTrue(sessions.allSatisfy(\.exists))
+    }
 }

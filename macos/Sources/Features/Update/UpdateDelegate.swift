@@ -11,8 +11,9 @@ extension UpdateDriver: SPUUpdaterDelegate {
         // you share a single appcast file. We don't want to do that so we
         // do this instead.
         switch appDelegate.ghostty.config.autoUpdateChannel {
-        case .tip: return "https://tip.files.ghostty.org/appcast.xml"
-        case .stable: return "https://release.files.ghostty.org/appcast.xml"
+        // Steppe does not ship an update feed yet. Never point Sparkle at Ghostty's
+        // feed: a manual check would otherwise offer to replace Steppe with Ghostty.
+        case .tip, .stable: return nil
         }
     }
 

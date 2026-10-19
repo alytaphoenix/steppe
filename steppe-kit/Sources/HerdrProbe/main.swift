@@ -115,13 +115,42 @@ case "refresh":
     }
 
 case "store":
+    let seconds = Double(arguments.dropFirst().first ?? "3") ?? 3
     let summary = await Task { @MainActor in
         let store = HerdrStore(session: session)
+        var changes: [String] = []
+        store.onAgentStatusChange = { change in
+            changes.append("\(change.paneId):\(change.agentStatus.rawValue)")
+        }
         store.start()
-        try? await Task.sleep(for: .seconds(3))
-        return "state=\(store.state.label) workspaces=\(store.workspaces.count) panes=\(store.totalPanes) agents=\(store.agents.count) events=\(store.eventCount)"
+        try? await Task.sleep(for: .seconds(seconds))
+        let last = store.lastStatusChange.map { "\($0.paneId):\($0.agentStatus.rawValue)" } ?? "none"
+        return "state=\(store.state.label) workspaces=\(store.workspaces.count) panes=\(store.totalPanes) agents=\(store.agents.count) events=\(store.eventCount) last=\(last) changes=\(changes.joined(separator: ","))"
     }.value
     print(summary)
+
+case "exercise":
+    do {
+        let workspace = try await client.createWorkspace(label: "steppe-exercise", focus: true)
+        print("workspace: \(workspace.workspace.workspaceId) \(workspace.workspace.label)")
+
+        let tab = try await client.createTab(
+            workspaceId: workspace.workspace.workspaceId,
+            label: "exercise",
+            focus: true
+        )
+        print("tab: \(tab.tab.tabId) \(tab.tab.label)")
+
+        let pane = try await client.splitPane(
+            paneId: tab.rootPane.paneId,
+            direction: .right,
+            focus: true
+        )
+        print("split: \(pane.pane.paneId)")
+    } catch {
+        fputs("error: \(error.localizedDescription)\n", stderr)
+        exit(1)
+    }
 
 case "focus":
     guard arguments.count >= 2 else {
@@ -155,7 +184,8 @@ case "help", "--help", "-h":
       watch               Print lifecycle events as they arrive
       ping                Check the server version and protocol
       refresh             Fetch snapshot and agent list concurrently
-      store               Start HerdrStore headlessly for 3 seconds
+      store [seconds]     Start HerdrStore headlessly and print status changes
+      exercise            Create a workspace, tab, and split through the socket
       focus <pane_id>     Focus a pane through Herdr
       sessions            List named sessions with sockets
     """)

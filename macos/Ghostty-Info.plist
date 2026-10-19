@@ -19,7 +19,7 @@
 				<string>pl</string>
 			</array>
 			<key>CFBundleTypeIconFile</key>
-			<string>AppIcon.icns</string>
+			<string>Steppe.icns</string>
 			<key>CFBundleTypeName</key>
 			<string>Terminal scripts</string>
 			<key>CFBundleTypeRole</key>

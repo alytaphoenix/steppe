@@ -2158,6 +2158,14 @@ keybind: Keybinds = .{},
 ///        or rounded corners, use `macos-titlebar-style = hidden` instead.
 @"window-decoration": WindowDecoration = .auto,
 
+/// Whether the Steppe sidebar is shown when a terminal window opens.
+///
+/// This is a Steppe-specific setting; upstream Ghostty ignores it. The sidebar
+/// can be toggled at runtime from the Steppe menu (ctrl+shift+s).
+///
+/// Available since: 1.3.1 (Steppe fork)
+@"steppe-sidebar": bool = true,
+
 /// The font that will be used for the application's window and tab titles.
 ///
 /// If this setting is left unset, the system default font will be used.

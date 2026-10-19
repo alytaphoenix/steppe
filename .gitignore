@@ -37,3 +37,6 @@ vgcore.*
 steppe-kit/.build/
 steppe-kit/.swiftpm/
 macos/build/
+
+# Steppe artifacts
+dist/
