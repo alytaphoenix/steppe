@@ -29,8 +29,9 @@ without reading the TUI chrome.
 
 ## Install
 
-Download the latest DMG or ZIP from the repository's Releases page. The local package is
-ad-hoc signed; for a fully notarized build, see [docs/building.md](docs/building.md).
+Download the latest DMG or ZIP from
+[Releases](https://github.com/alytaphoenix/steppe/releases). The 0.1.0 package is ad-hoc
+signed; for a fully notarized build, see [docs/building.md](docs/building.md).
 
 Build from source:
 
